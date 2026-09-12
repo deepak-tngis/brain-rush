@@ -14,7 +14,7 @@ mode.
 
 ```bash
 npm install
-npm test              # 96 unit tests, no device needed
+npm test              # 113 tests: engine, persistence, ads, and screen renders
 npm run typecheck
 
 npm run prebuild      # generate the native Android project
@@ -163,7 +163,21 @@ python3 tools/generate-sounds.py
 ## Testing
 
 ```bash
-npm test                 # game engine, scoring, persistence, ad frequency
+npm test                              # everything
+npm test -- --selectProjects engine   # engine, scoring, persistence, ad policy
+npm test -- --selectProjects ui       # screen renders and the ad manager
 npm run typecheck
-cd backend && npm test   # health endpoint
+cd backend && npm test                # health endpoint
 ```
+
+Two projects, because they need very different things. `engine` runs the pure
+logic in a plain node environment — fast, hermetic, no native mocks. `ui` renders
+the real screens through `jest-expo` with only native modules stubbed, which is
+the closest available check to "it launches and every screen is navigable"
+without a device. The ad SDK is deliberately made *unavailable* in the screen
+tests, so they double as proof that the game is fully playable when no advert can
+load — the airplane-mode case.
+
+The rewarded-ad tests drive a controllable fake SDK through every way an advert
+can end (earned, dismissed, errored, never filled) and assert that a reward is
+granted only for the first.

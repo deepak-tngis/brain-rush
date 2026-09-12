@@ -152,9 +152,12 @@ function loadUnit(unit: AdUnit, module: MobileAdsModule): Promise<AdUnit | null>
  */
 export async function maybeShowInterstitial(options: {
   puzzleActive: boolean;
+  /** Injectable clock. When supplied it is used for the cooldown stamp too, so
+   *  the decision and the record can never be read off two different clocks. */
   now?: number;
 }): Promise<boolean> {
-  const now = options.now ?? Date.now();
+  const injectedNow = options.now;
+  const now = injectedNow ?? Date.now();
   const decision = registerTrigger(policy, { puzzleActive: options.puzzleActive, now });
   policy = decision.state;
   if (!decision.show) return false;
@@ -189,7 +192,8 @@ export async function maybeShowInterstitial(options: {
         cleanups.push(
           loaded.addAdEventListener(module.AdEventType.OPENED, () => {
             opened = true;
-            policy = registerShown(Date.now());
+            // Stamped when the ad actually opened, not when it was requested.
+            policy = registerShown(injectedNow ?? Date.now());
           }),
         );
         cleanups.push(loaded.addAdEventListener(module.AdEventType.CLOSED, () => done(opened)));
