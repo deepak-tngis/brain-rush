@@ -50,7 +50,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // The game is fully offline; INTERNET is only needed so ad requests can be
     // attempted. Everything degrades gracefully when it is unavailable.
     permissions: ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE'],
-    blockedPermissions: ['com.google.android.gms.permission.AD_ID'],
+    /**
+     * expo-av declares the full audio/video permission set, but Brain Rush only
+     * ever plays seven bundled sound effects. Everything it does not use is
+     * stripped so the Play listing asks for nothing it cannot justify, and the
+     * advertising ID is dropped in favour of non-personalised requests.
+     */
+    blockedPermissions: [
+      'com.google.android.gms.permission.AD_ID',
+      'android.permission.RECORD_AUDIO',
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+      'android.permission.SYSTEM_ALERT_WINDOW',
+    ],
   },
   ios: {
     bundleIdentifier: 'com.vantyralabs.brainrush',

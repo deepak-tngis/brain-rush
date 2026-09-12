@@ -14,6 +14,12 @@ const COLORS: readonly GlyphColor[] = ['blue', 'orange', 'pink', 'green', 'purpl
 const ARROW = '→';
 
 /**
+ * Mappings are laid out two per line. Stacking five or six of them vertically
+ * would push the board taller than a phone screen can give it.
+ */
+const MAPPINGS_PER_ROW = 2;
+
+/**
  * The colour set doubles as the answer set, so it never drops below four: a
  * three-way choice would make guessing too cheap next to the other puzzle types.
  */
@@ -72,7 +78,7 @@ function bijectionPuzzle(rng: Rng, difficulty: Difficulty, shape: ShapeName): Pu
       difficulty,
       title: 'Colour Logic',
       instruction: 'Each colour turns into a different one. What is missing?',
-      board: { kind: 'grid', cols: 3, cells },
+      board: { kind: 'grid', cols: MAPPINGS_PER_ROW * 3, cells },
       contents,
       answerIndex,
       timeLimitMs: baseTimeLimit(difficulty, 1.2),
@@ -122,7 +128,7 @@ function cyclePuzzle(rng: Rng, difficulty: Difficulty, shape: ShapeName): Puzzle
       difficulty,
       title: 'Colour Logic',
       instruction: `Follow the arrows. Where does ${startColor} land after ${steps} steps?`,
-      board: { kind: 'grid', cols: 3, cells },
+      board: { kind: 'grid', cols: MAPPINGS_PER_ROW * 3, cells },
       contents,
       answerIndex,
       timeLimitMs: baseTimeLimit(difficulty, 1.2),

@@ -8,7 +8,12 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts'],
-  collectCoverageFrom: ['src/engine/**/*.ts'],
+  collectCoverageFrom: ['src/engine/**/*.ts', 'src/ads/interstitialPolicy.ts', 'src/storage/**/*.ts'],
+  moduleNameMapper: {
+    // The persistence layer is exercised against an in-memory key/value store;
+    // everything else under test is free of native dependencies.
+    '^@react-native-async-storage/async-storage$': '<rootDir>/src/testing/asyncStorageMock.ts',
+  },
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',

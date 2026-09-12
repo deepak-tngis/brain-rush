@@ -90,9 +90,11 @@ function cyclePuzzle(rng: Rng, difficulty: Difficulty): PuzzleDraft {
  * is arithmetic on the repeat count, so the answer is forced.
  */
 function growthPuzzle(rng: Rng, difficulty: Difficulty): PuzzleDraft {
-  const symbol = rng.pick(SYMBOLS);
+  // Confusable glyphs rather than bigger groups carry the harder bands: a run of
+  // ten stars stops being a puzzle and starts being an eye test.
+  const symbol = rng.pick(difficulty === 'hard' ? CONFUSABLE : SYMBOLS);
   const start = rng.int(1, 2);
-  const step = difficulty === 'hard' ? rng.int(1, 2) : 1;
+  const step = 1;
   const visibleCount = difficulty === 'easy' ? 3 : 4;
 
   const counts: number[] = [];
