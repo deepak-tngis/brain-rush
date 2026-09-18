@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
 import { setHapticsEnabled } from '../audio/haptics';
+import {
+  initMusic,
+  setMusicEnabled,
+  setMusicVolume,
+  suspendMusic,
+} from '../audio/musicManager';
 import { initSounds, setSoundEnabled } from '../audio/soundManager';
 import { setPersonalisedAds } from '../ads/adManager';
 import {
@@ -61,10 +67,14 @@ export function useProgressBootstrap(): ProgressBootstrap {
   useEffect(() => {
     setSoundEnabled(progress.settings.soundEnabled);
     setHapticsEnabled(progress.settings.hapticsEnabled);
+    setMusicEnabled(progress.settings.musicEnabled);
+    setMusicVolume(progress.settings.musicVolume);
     setPersonalisedAds(progress.settings.personalisedAds);
   }, [
     progress.settings.soundEnabled,
     progress.settings.hapticsEnabled,
+    progress.settings.musicEnabled,
+    progress.settings.musicVolume,
     progress.settings.personalisedAds,
   ]);
 
@@ -73,10 +83,17 @@ export function useProgressBootstrap(): ProgressBootstrap {
     void initSounds();
   }, [ready, progress.settings.soundEnabled]);
 
-  // A backgrounded app may never come back, so commit any pending write now.
+  useEffect(() => {
+    if (!ready || !progress.settings.musicEnabled) return;
+    void initMusic();
+  }, [ready, progress.settings.musicEnabled]);
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (next) => {
+      // A backgrounded app may never come back, so commit any pending write now.
       if (next !== 'active') void flush();
+      // Music must not keep playing over the home screen or another app.
+      suspendMusic(next !== 'active');
     });
     return () => subscription.remove();
   }, []);

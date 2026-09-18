@@ -18,9 +18,15 @@ export interface DailyProgress {
 export interface Settings {
   readonly soundEnabled: boolean;
   readonly hapticsEnabled: boolean;
+  readonly musicEnabled: boolean;
+  /** Music level, 0..1. Independent of the effects, which stay at fixed levels. */
+  readonly musicVolume: number;
   /** Personalised ads are opt-in; the default is the privacy-preserving one. */
   readonly personalisedAds: boolean;
 }
+
+/** Where the music sits when the player has never touched the slider. */
+export const DEFAULT_MUSIC_VOLUME = 0.5;
 
 export interface KindStat {
   readonly seen: number;
@@ -68,7 +74,17 @@ export function defaultProgress(): ProgressState {
     settings: {
       soundEnabled: true,
       hapticsEnabled: true,
-      personalisedAds: false,
+      musicEnabled: true,
+      musicVolume: DEFAULT_MUSIC_VOLUME,
+      /**
+       * On by default, and opt-out from Settings.
+       *
+       * This switch is not the app's consent mechanism and cannot grant
+       * anything on its own: where the GDPR applies, the UMP consent form is
+       * the ceiling and this only narrows it further. See
+       * src/ads/adManager.ts.
+       */
+      personalisedAds: true,
     },
     kindStats: emptyKindStats(),
   };
@@ -139,7 +155,16 @@ export function reviveProgress(raw: unknown): ProgressState {
     settings: {
       soundEnabled: asBoolean(settingsInput.soundEnabled, true),
       hapticsEnabled: asBoolean(settingsInput.hapticsEnabled, true),
-      personalisedAds: asBoolean(settingsInput.personalisedAds, false),
+      musicEnabled: asBoolean(settingsInput.musicEnabled, true),
+      // Clamped rather than merely defaulted: a stored value outside 0..1 would
+      // otherwise be handed straight to the player's volume setter.
+      musicVolume: Math.max(
+        0,
+        Math.min(1, asNumber(settingsInput.musicVolume, DEFAULT_MUSIC_VOLUME)),
+      ),
+      // Matches the default above, so an install that predates this setting
+      // reads the same as a fresh one rather than silently opting out.
+      personalisedAds: asBoolean(settingsInput.personalisedAds, true),
     },
     kindStats,
   };

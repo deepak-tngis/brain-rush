@@ -24,6 +24,27 @@ export const colors = {
   dangerSoft: '#ffe4e9',
   shadow: '#8a8aa3',
   white: '#ffffff',
+  purple: '#7b5cf0',
+  /** Tints for icon badges and metric tiles — the flat colours at ~10% over white. */
+  primarySoft: '#e6efff',
+  orangeSoft: '#fff1e0',
+  pinkSoft: '#ffe6f1',
+  purpleSoft: '#eeeaff',
+} as const;
+
+/**
+ * Gradient stops, as tuples ready to hand to `expo-linear-gradient`.
+ *
+ * Used sparingly and only as backdrops: flat fills stay the rule for anything
+ * the player has to read a value off.
+ */
+export const gradients = {
+  /** Home hero backdrop — a cool wash that keeps the dark text readable. */
+  sky: ['#e8efff', '#f2ecff', '#f0f0f3'] as const,
+  /** The intro curtain: the one place the app goes full-bleed brand colour. */
+  brand: ['#1b57b3', '#2f80ed', '#7b5cf0'] as const,
+  primary: ['#4b93f7', '#2f80ed'] as const,
+  pink: ['#ff62a5', '#f83f8f'] as const,
 } as const;
 
 /** Palette slots used by puzzle glyphs, kept distinguishable at small sizes. */

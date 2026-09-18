@@ -1,8 +1,9 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 
 import { PressableScale } from './PressableScale';
-import { colors, elevation, radii, spacing, typography } from '../theme/theme';
+import { colors, elevation, gradients, radii, spacing, typography } from '../theme/theme';
 
 export function Card({
   children,
@@ -32,6 +33,16 @@ const TONE_TEXT: Record<ButtonTone, string> = {
   ghost: colors.textMuted,
 };
 
+/**
+ * Tones that fill with a gradient instead of a flat colour. The flat value in
+ * `TONE_BACKGROUND` stays as the base, so the button is still the right colour
+ * for the single frame before the gradient paints.
+ */
+const TONE_GRADIENT: Partial<Record<ButtonTone, readonly [string, string]>> = {
+  primary: gradients.primary,
+  pink: gradients.pink,
+};
+
 export interface ButtonProps {
   readonly label: string;
   readonly onPress: () => void;
@@ -55,6 +66,7 @@ export function Button({
 }: ButtonProps): React.ReactElement {
   const height = size === 'large' ? 64 : size === 'medium' ? 52 : 42;
   const fontSize = size === 'large' ? 20 : size === 'medium' ? 16 : 14;
+  const gradient = TONE_GRADIENT[tone];
 
   return (
     <PressableScale
@@ -72,8 +84,19 @@ export function Button({
         style,
       ]}
     >
+      {gradient !== undefined ? (
+        <LinearGradient
+          colors={[...gradient]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      ) : null}
       <View style={styles.buttonInner}>
-        {icon !== undefined ? <Text style={[styles.buttonIcon, { fontSize }]}>{icon}</Text> : null}
+        {icon !== undefined ? (
+          <Text style={[styles.buttonIcon, { fontSize, color: TONE_TEXT[tone] }]}>{icon}</Text>
+        ) : null}
         <View>
           <Text style={[styles.buttonLabel, { fontSize, color: TONE_TEXT[tone] }]}>{label}</Text>
           {subtitle !== undefined ? (
@@ -83,6 +106,36 @@ export function Button({
       </View>
     </PressableScale>
   );
+}
+
+/**
+ * A rounded square holding one glyph, tinted to match whatever it labels. Gives
+ * list rows a fixed leading column so their text aligns down the screen.
+ */
+export function IconBadge({
+  icon,
+  tint,
+  size = 40,
+}: {
+  icon: string;
+  tint: string;
+  size?: number;
+}): React.ReactElement {
+  return (
+    <View
+      style={[
+        styles.badge,
+        { width: size, height: size, borderRadius: size / 3, backgroundColor: tint },
+      ]}
+    >
+      <Text style={{ fontSize: size * 0.45 }}>{icon}</Text>
+    </View>
+  );
+}
+
+/** Hairline between stacked rows inside a single card. */
+export function Divider(): React.ReactElement {
+  return <View style={styles.divider} />;
 }
 
 export function StatPill({
@@ -170,6 +223,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
+    // Clips the gradient fill to the rounded corners.
+    overflow: 'hidden',
   },
   buttonInner: {
     flexDirection: 'row',
@@ -177,7 +232,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   buttonIcon: {
-    color: colors.white,
+    fontWeight: '700',
+  },
+  badge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: spacing.xs,
   },
   buttonLabel: {
     fontWeight: '800',

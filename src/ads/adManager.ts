@@ -31,6 +31,12 @@ interface AdUnit {
   readonly loaded?: boolean;
 }
 
+/** What the UMP SDK reports back about the user's consent state. */
+interface ConsentInfo {
+  readonly canRequestAds?: boolean;
+  readonly privacyOptionsRequirementStatus?: string;
+}
+
 interface MobileAdsModule {
   default: () => {
     initialize(): Promise<unknown>;
@@ -41,6 +47,12 @@ interface MobileAdsModule {
   AdEventType: Record<string, unknown>;
   RewardedAdEventType: Record<string, unknown>;
   MaxAdContentRating: Record<string, string>;
+  AdsConsent: {
+    gatherConsent(options?: Record<string, unknown>): Promise<ConsentInfo>;
+    showPrivacyOptionsForm(): Promise<ConsentInfo>;
+    getGdprApplies(): Promise<boolean>;
+    getUserChoices(): Promise<Record<string, boolean>>;
+  };
 }
 
 let sdk: MobileAdsModule | null | undefined;
@@ -65,6 +77,19 @@ let initialised: Promise<boolean> | null = null;
 let personalisedAds = false;
 let policy: InterstitialPolicyState = createPolicyState();
 
+/**
+ * Whether the consent the user actually gave permits personalised adverts.
+ *
+ * Distinct from `personalisedAds`, which is the in-app switch. Consent is the
+ * ceiling and the switch sits under it: a user inside the GDPR region who
+ * refused the consent form gets non-personalised adverts no matter what the
+ * switch says, and the switch can only ever narrow, never widen, that.
+ */
+let consentAllowsPersonalisation = false;
+
+/** True when Google requires the app to surface a way to revisit consent. */
+let privacyOptionsNeeded = false;
+
 export function setPersonalisedAds(value: boolean): void {
   personalisedAds = value;
 }
@@ -73,9 +98,56 @@ export function adsAvailable(): boolean {
   return resolveSdk() !== null;
 }
 
+/** Whether Settings should offer the "advert privacy choices" entry point. */
+export function privacyOptionsRequired(): boolean {
+  return privacyOptionsNeeded;
+}
+
+/**
+ * Re-opens the UMP consent form so a user can change their mind.
+ *
+ * Google requires this entry point wherever the consent form was required in
+ * the first place; Settings owns the button.
+ */
+export async function showPrivacyOptions(): Promise<boolean> {
+  const module = resolveSdk();
+  if (module === null) return false;
+  try {
+    await module.AdsConsent.showPrivacyOptionsForm();
+    consentAllowsPersonalisation = await readPersonalisationConsent(module);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reads whether the user consented to personalised adverts.
+ *
+ * Outside the GDPR region there is no TC string to decode and no consent to
+ * withhold, so personalisation is permitted and the in-app switch decides
+ * alone. Inside it, TCF purpose 4 ("select personalised ads") is the answer.
+ */
+async function readPersonalisationConsent(module: MobileAdsModule): Promise<boolean> {
+  try {
+    const gdprApplies = await module.AdsConsent.getGdprApplies();
+    if (!gdprApplies) return true;
+    const choices = await module.AdsConsent.getUserChoices();
+    return choices.selectPersonalisedAds === true;
+  } catch {
+    // Unreadable consent is not consent.
+    return false;
+  }
+}
+
 /**
  * Starts the SDK. Resolves false (rather than rejecting) when ads are simply not
  * available — offline, missing module, or an initialisation failure.
+ *
+ * Consent is gathered *before* the SDK is initialised and before any request is
+ * made, which is the order Google's EU User Consent Policy requires. Because
+ * `delayAppMeasurementInit` is set in app.config.ts, no user-level event data
+ * leaves the device ahead of this either.
  */
 export function initAds(): Promise<boolean> {
   if (initialised !== null) return initialised;
@@ -83,6 +155,25 @@ export function initAds(): Promise<boolean> {
   initialised = (async () => {
     const module = resolveSdk();
     if (module === null) return false;
+
+    let canRequestAds = true;
+    try {
+      const info = await module.AdsConsent.gatherConsent();
+      // `canRequestAds` false means the user declined even the basic storage
+      // consent: no advert may be requested at all, personalised or not.
+      canRequestAds = info.canRequestAds !== false;
+      privacyOptionsNeeded = info.privacyOptionsRequirementStatus === 'REQUIRED';
+      consentAllowsPersonalisation = await readPersonalisationConsent(module);
+    } catch {
+      // The form could not be fetched — offline on a first run, typically.
+      // Google's guidance is to go ahead using the previous session's status
+      // rather than blocking the app, so adverts continue; personalisation
+      // does not, because nothing here established consent for it.
+      consentAllowsPersonalisation = false;
+    }
+
+    if (!canRequestAds) return false;
+
     try {
       await module.default().setRequestConfiguration({
         maxAdContentRating: module.MaxAdContentRating.PG,
@@ -100,7 +191,7 @@ export function initAds(): Promise<boolean> {
 }
 
 function requestOptions(): Record<string, unknown> {
-  return { requestNonPersonalizedAdsOnly: !personalisedAds };
+  return { requestNonPersonalizedAdsOnly: !(personalisedAds && consentAllowsPersonalisation) };
 }
 
 /**

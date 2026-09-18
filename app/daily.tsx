@@ -2,7 +2,9 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { EnterView } from '../src/components/Feedback';
 import { Screen } from '../src/components/Screen';
+import { ScreenHeader } from '../src/components/ScreenHeader';
 import { Button, Card, ProgressBar, SectionTitle, StatPill } from '../src/components/ui';
 import { DAILY_QUESTION_COUNT, dailyKey } from '../src/engine';
 import { useAndroidBack } from '../src/hooks/useAndroidBack';
@@ -46,19 +48,15 @@ export default function DailyScreen(): React.ReactElement {
 
   return (
     <Screen scroll contentStyle={styles.content}>
-      <View>
-        <Button label={'←  Back'} onPress={goBack} tone="ghost" size="small" />
-      </View>
+      <ScreenHeader title="Daily Challenge" subtitle={readableDate} onBack={goBack} />
 
-      <View style={styles.hero}>
+      <EnterView style={styles.hero}>
         <Text style={styles.emoji}>{'\u{1F4C5}'}</Text>
-        <Text style={styles.title}>Daily Challenge</Text>
-        <Text style={styles.date}>{readableDate}</Text>
         <Text style={styles.blurb}>
           {DAILY_QUESTION_COUNT} puzzles, identical for every player, generated on your device. It
           works with no signal at all.
         </Text>
-      </View>
+      </EnterView>
 
       <View style={styles.stats}>
         <StatPill
@@ -121,14 +119,6 @@ const styles = StyleSheet.create({
   },
   emoji: {
     fontSize: 52,
-  },
-  title: {
-    ...typography.title,
-    color: colors.text,
-  },
-  date: {
-    ...typography.label,
-    color: colors.textMuted,
   },
   blurb: {
     ...typography.body,

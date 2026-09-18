@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
-import { colors, elevation, radii, spacing, typography } from '../theme/theme';
+import { colors, elevation, radii, spacing } from '../theme/theme';
 
 /**
  * Celebrates a streak.
@@ -146,11 +146,28 @@ export function ShakeView({
   );
 }
 
-/** Slow, continuous pulse used to draw the eye to the Play button. */
-export function PulseView({ children }: { children: React.ReactNode }): React.ReactElement {
+/**
+ * Slow, continuous pulse used to draw the eye to the Play button.
+ *
+ * `active` exists for power: expo-router keeps Home mounted underneath the
+ * board, so without it this loop would keep the animation driver ticking for
+ * the entire time the player is doing something else.
+ */
+export function PulseView({
+  children,
+  active = true,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+}): React.ReactElement {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (!active) {
+      pulse.setValue(0);
+      return undefined;
+    }
+
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
@@ -169,7 +186,7 @@ export function PulseView({ children }: { children: React.ReactNode }): React.Re
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [pulse, active]);
 
   return (
     <Animated.View
@@ -184,20 +201,114 @@ export function PulseView({ children }: { children: React.ReactNode }): React.Re
   );
 }
 
-/** Banner explaining what just happened, in the colour of the outcome. */
-export function ResultBanner({
-  correct,
-  text,
+/**
+ * Slow vertical drift, used to keep the Home mark from sitting dead still.
+ *
+ * Stoppable for the same reason as {@link PulseView}: an idle loop on a screen
+ * nobody is looking at is pure battery.
+ */
+export function FloatView({
+  children,
+  distance = 7,
+  duration = 2400,
+  active = true,
 }: {
-  correct: boolean;
-  text: string;
+  children: React.ReactNode;
+  distance?: number;
+  duration?: number;
+  active?: boolean;
 }): React.ReactElement {
+  const drift = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!active) {
+      drift.setValue(0);
+      return undefined;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(drift, {
+          toValue: 1,
+          duration,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.sin),
+        }),
+        Animated.timing(drift, {
+          toValue: 0,
+          duration,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.sin),
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [drift, duration, active]);
+
   return (
-    <View style={[styles.banner, correct ? styles.bannerCorrect : styles.bannerWrong]}>
-      <Text style={[styles.bannerText, correct ? styles.textCorrect : styles.textWrong]}>
-        {text}
-      </Text>
-    </View>
+    <Animated.View
+      style={{
+        transform: [
+          {
+            translateY: drift.interpolate({
+              inputRange: [0, 1],
+              outputRange: [distance / 2, -distance / 2],
+            }),
+          },
+        ],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+/**
+ * Fades and lifts its children in once, on mount.
+ *
+ * Home uses it with a stagger so the screen assembles itself as the intro
+ * curtain lifts, rather than snapping in fully formed behind it.
+ */
+export function EnterView({
+  children,
+  delay = 0,
+  style,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  style?: React.ComponentProps<typeof View>['style'];
+}): React.ReactElement {
+  const enter = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.sequence([
+      Animated.delay(delay),
+      Animated.timing(enter, {
+        toValue: 1,
+        duration: 420,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }),
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [enter, delay]);
+
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          opacity: enter,
+          transform: [
+            { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
+          ],
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
   );
 }
 
@@ -229,28 +340,5 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontSize: 18,
     fontWeight: '900',
-  },
-  banner: {
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    width: '100%',
-  },
-  bannerCorrect: {
-    backgroundColor: colors.successSoft,
-  },
-  bannerWrong: {
-    backgroundColor: colors.dangerSoft,
-  },
-  bannerText: {
-    ...typography.body,
-    textAlign: 'center',
-    fontWeight: '700',
-  },
-  textCorrect: {
-    color: colors.success,
-  },
-  textWrong: {
-    color: colors.danger,
   },
 });

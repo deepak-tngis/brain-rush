@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
-import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -8,14 +8,28 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 
 import { initAds } from '../src/ads/adManager';
+import { ErrorScreen } from '../src/components/ErrorScreen';
+import { IntroSequence } from '../src/components/IntroSequence';
 import { GameProvider } from '../src/state/GameProvider';
 import { useProgressBootstrap } from '../src/state/ProgressProvider';
 import { colors } from '../src/theme/theme';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
+/**
+ * expo-router renders a route's `ErrorBoundary` export in place of the route
+ * when it throws. Exported from the root layout, it covers every screen.
+ *
+ * Without it, a single render-time exception unmounts the tree and a release
+ * build goes silently blank — the worst possible failure, because the player
+ * cannot tell whether the app is broken or just frozen.
+ */
+export { ErrorScreen as ErrorBoundary };
+
 export default function RootLayout(): React.ReactElement {
   const { ready } = useProgressBootstrap();
+  const [introDone, setIntroDone] = useState(false);
+  const finishIntro = useCallback(() => setIntroDone(true), []);
 
   useEffect(() => {
     void SystemUI.setBackgroundColorAsync(colors.background).catch(() => undefined);
@@ -29,10 +43,15 @@ export default function RootLayout(): React.ReactElement {
     void initAds();
   }, [ready]);
 
+  // The stack mounts underneath the intro rather than after it, so the first
+  // render of Home happens while the animation is still playing and the handover
+  // lands on a screen that is already drawn.
+  const showIntro = !introDone;
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
+        <StatusBar style={showIntro ? 'light' : 'dark'} />
         <GameProvider>
           {ready ? (
             <Stack
@@ -49,11 +68,8 @@ export default function RootLayout(): React.ReactElement {
               <Stack.Screen name="stats" />
               <Stack.Screen name="settings" />
             </Stack>
-          ) : (
-            <View style={styles.loading}>
-              <ActivityIndicator color={colors.primary} size="large" />
-            </View>
-          )}
+          ) : null}
+          {showIntro ? <IntroSequence onDone={finishIntro} /> : null}
         </GameProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -63,12 +79,6 @@ export default function RootLayout(): React.ReactElement {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: colors.background,
   },
 });

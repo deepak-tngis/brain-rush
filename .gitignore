@@ -49,3 +49,12 @@ backend/node_modules/
 
 # coverage
 coverage/
+
+# Intermediate HTML for the Play Store graphics; the PNGs in store/play are
+# the deliverable and are tracked.
+store/build/
+
+# Upload signing key and its passwords. Losing these means losing the ability
+# to update the app on Play; committing them means anyone can publish as you.
+# Back them up somewhere private, never here.
+/credentials

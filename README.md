@@ -21,7 +21,7 @@ npm run prebuild      # generate the native Android project
 npm run android       # build and run on a connected device or emulator
 ```
 
-Brain Rush uses native modules (AdMob, AsyncStorage, expo-av), so it needs a
+Brain Rush uses native modules (AdMob, AsyncStorage, expo-audio), so it needs a
 development build rather than Expo Go:
 
 ```bash
@@ -181,3 +181,5 @@ load — the airplane-mode case.
 The rewarded-ad tests drive a controllable fake SDK through every way an advert
 can end (earned, dismissed, errored, never filled) and assert that a reward is
 granted only for the first.
+
+npx eas-cli build --platform android --profile preview --non-interactive --no-wait

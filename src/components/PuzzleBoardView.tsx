@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { Cell, PuzzleBoard } from '../engine';
@@ -27,7 +27,7 @@ function clampGlyph(size: number): number {
   return Math.max(MIN_GLYPH, Math.min(MAX_GLYPH, Math.floor(size)));
 }
 
-export function PuzzleBoardView({
+function PuzzleBoardViewComponent({
   board,
   width,
   height,
@@ -140,3 +140,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 });
+
+/**
+ * Memoised because the per-puzzle countdown re-renders the board screen ten
+ * times a second. The board itself only changes when the puzzle does, so
+ * without this every tick reconciles the whole arrangement of glyphs for
+ * nothing — the single largest avoidable cost while a puzzle is on screen.
+ */
+export const PuzzleBoardView = memo(PuzzleBoardViewComponent);

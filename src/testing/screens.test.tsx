@@ -30,6 +30,9 @@ jest.mock('expo-router', () => ({
     replace: (path: string) => replaced.push(path),
     back: () => pushed.push('back'),
   }),
+  // Screens under test are rendered on their own, so they are always the
+  // visible one; Home uses this to stop its idle animations when it is not.
+  useIsFocused: () => true,
 }));
 
 const insets = { top: 24, bottom: 12, left: 0, right: 0 };
@@ -108,6 +111,20 @@ describe('every screen renders', () => {
   });
 });
 
+/**
+ * Waits until the board is actually answerable.
+ *
+ * Puzzles are drawn at random, and a memory puzzle opens on a study phase that
+ * shows the board with no options at all for up to 2.6 seconds. Waiting on the
+ * question header instead — which is up during that phase too — made these
+ * tests fail whenever the draw happened to land on one.
+ */
+async function waitForOptions(): Promise<void> {
+  await waitFor(() => expect(screen.getAllByRole('radio').length).toBeGreaterThan(0), {
+    timeout: 6000,
+  });
+}
+
 /** Starts an endless run, then renders the board for it. */
 function PlayHarness(): ReactElement {
   const { session, start } = useGame();
@@ -122,7 +139,8 @@ describe('playing', () => {
   it('renders a puzzle with a full HUD and tappable answers', async () => {
     await renderScreen(<PlayHarness />);
 
-    await waitFor(() => expect(screen.getByText('Question 1')).toBeTruthy());
+    await waitForOptions();
+    expect(screen.getByText('Question 1')).toBeTruthy();
     expect(screen.getByText('Score')).toBeTruthy();
     expect(screen.getByText('Coins')).toBeTruthy();
     expect(screen.getByText('Streak')).toBeTruthy();
@@ -132,7 +150,7 @@ describe('playing', () => {
 
   it('accepts an answer and carries on with no ad SDK present', async () => {
     await renderScreen(<PlayHarness />);
-    await waitFor(() => expect(screen.getByText('Question 1')).toBeTruthy());
+    await waitForOptions();
 
     const options = screen.getAllByRole('radio');
     await act(async () => {
@@ -144,9 +162,36 @@ describe('playing', () => {
     await waitFor(() => expect(screen.getByText('Score')).toBeTruthy());
   });
 
+  it('keeps the hint controls in place once an answer lands', async () => {
+    await renderScreen(<PlayHarness />);
+    await waitForOptions();
+
+    await act(async () => {
+      fireEvent.press(screen.getAllByRole('radio')[0] as never);
+    });
+
+    // This row used to be gated on the question phase, so answering unmounted
+    // both buttons and everything below them jumped up the screen.
+    expect(screen.getByText('Reveal the answer')).toBeTruthy();
+  });
+
+  it('reveals the correct answer beside the puzzle once a round is decided', async () => {
+    await renderScreen(<PlayHarness />);
+    await waitForOptions();
+
+    await act(async () => {
+      fireEvent.press(screen.getAllByRole('radio')[0] as never);
+    });
+
+    // Whichever way the round went, the player is told, in words rather than
+    // by colour alone.
+    const verdict = screen.queryByText('Correct') ?? screen.queryByText('The answer was');
+    expect(verdict).toBeTruthy();
+  });
+
   it('offers a hint and explains itself when no advert can be served', async () => {
     await renderScreen(<PlayHarness />);
-    await waitFor(() => expect(screen.getByText('Reveal the answer')).toBeTruthy());
+    await waitForOptions();
 
     await act(async () => {
       fireEvent.press(screen.getByText('Reveal the answer'));

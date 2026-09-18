@@ -1,9 +1,9 @@
-import { useCallback } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { memo } from 'react';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import type { PuzzleOption } from '../engine';
 import { colors, elevation, radii, spacing } from '../theme/theme';
-import { Glyph } from './Glyph';
+import { OptionContentView } from './OptionContent';
 import { PressableScale } from './PressableScale';
 
 export type OptionFeedback = 'idle' | 'correct' | 'wrong' | 'revealed';
@@ -24,14 +24,14 @@ const FEEDBACK_STYLE: Record<OptionFeedback, { border: string; background: strin
   revealed: { border: colors.orange, background: '#fff4e5' },
 };
 
-export function OptionGrid({
+function OptionGridComponent({
   options,
   layout,
   onSelect,
   feedback,
   disabled,
 }: OptionGridProps): React.ReactElement {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
 
   // Two columns on a phone, three when there is genuinely room, one for lists.
   const columns = layout === 'list' ? 1 : width >= 600 ? 3 : 2;
@@ -39,51 +39,31 @@ export function OptionGrid({
   const horizontalPadding = spacing.lg * 2;
   const tileWidth = (width - horizontalPadding - gap * (columns - 1)) / columns;
 
+  /**
+   * Vertical room matters as much as horizontal.
+   *
+   * Tile height used to be derived from tile *width* alone. On a 360x640dp
+   * budget phone that produced 104pt tiles, two rows of which left the puzzle
+   * area too little height — and because the stage is a flex child, it did not
+   * clip but overflowed, printing the puzzle title straight over the timer
+   * bars. Short screens get shorter tiles so the puzzle keeps its space.
+   */
+  const shortScreen = height < 760;
+
   // Six options mean three rows on a phone, so the tiles have to give height
   // back to the puzzle board rather than pushing it off the screen.
   const crowded = options.length > 4 && layout === 'grid';
+  const tallest = shortScreen ? (crowded ? 66 : 84) : crowded ? 78 : 104;
+  const shortest = shortScreen ? 54 : crowded ? 66 : 82;
   const tileHeight =
     layout === 'list'
-      ? 56
-      : Math.min(crowded ? 78 : 104, Math.max(crowded ? 66 : 82, tileWidth * (crowded ? 0.5 : 0.68)));
+      ? shortScreen
+        ? 50
+        : 56
+      : Math.min(tallest, Math.max(shortest, tileWidth * (crowded ? 0.5 : 0.68)));
 
-  const renderContent = useCallback(
-    (option: PuzzleOption) => {
-      const { content } = option;
-
-      if (content.kind === 'text') {
-        return (
-          <Text
-            style={styles.optionText}
-            numberOfLines={2}
-            adjustsFontSizeToFit
-            minimumFontScale={0.6}
-          >
-            {content.text}
-          </Text>
-        );
-      }
-
-      if (content.kind === 'cell') {
-        return <Glyph cell={content.cell} size={Math.min(tileHeight - 24, 56)} />;
-      }
-
-      const rows = Math.ceil(content.cells.length / content.cols);
-      const cellSize = Math.min(
-        (tileWidth - spacing.lg) / content.cols,
-        (tileHeight - spacing.md) / rows,
-        34,
-      );
-      return (
-        <View style={[styles.miniGrid, { width: cellSize * content.cols }]}>
-          {content.cells.map((cell, index) => (
-            <Glyph key={index} cell={cell} size={cellSize} />
-          ))}
-        </View>
-      );
-    },
-    [tileHeight, tileWidth],
-  );
+  const contentWidth = tileWidth - spacing.lg;
+  const contentHeight = tileHeight - spacing.md;
 
   return (
     <View style={[styles.container, { gap }]}>
@@ -110,7 +90,11 @@ export function OptionGrid({
               },
             ]}
           >
-            {renderContent(option)}
+            <OptionContentView
+              content={option.content}
+              width={contentWidth}
+              height={contentHeight}
+            />
           </PressableScale>
         );
       })}
@@ -130,16 +114,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
   },
-  optionText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: colors.text,
-    textAlign: 'center',
-  },
-  miniGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });
+
+/** Memoised for the same reason as the board: the countdown ticks at 10 Hz. */
+export const OptionGrid = memo(OptionGridComponent);

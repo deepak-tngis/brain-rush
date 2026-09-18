@@ -10,19 +10,28 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
-jest.mock('expo-av', () => ({
-  Audio: {
-    setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
-    Sound: {
-      createAsync: jest.fn().mockResolvedValue({
-        sound: {
-          replayAsync: jest.fn().mockResolvedValue(undefined),
-          unloadAsync: jest.fn().mockResolvedValue(undefined),
-          setVolumeAsync: jest.fn().mockResolvedValue(undefined),
-        },
-      }),
-    },
-  },
+jest.mock('expo-audio', () => ({
+  setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
+  preload: jest.fn().mockResolvedValue(undefined),
+  // A fresh player each call, so the effects and the music bed cannot end up
+  // sharing one object and masking a bug where they do on device.
+  createAudioPlayer: jest.fn(() => ({
+    volume: 1,
+    loop: false,
+    isLoaded: true,
+    currentTime: 0,
+    play: jest.fn(),
+    pause: jest.fn(),
+    seekTo: jest.fn().mockResolvedValue(undefined),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    remove: jest.fn(),
+  })),
+}));
+
+// A gradient is a native view with no behaviour the screens depend on, so a
+// plain View stands in for it and layout still resolves exactly as on device.
+jest.mock('expo-linear-gradient', () => ({
+  LinearGradient: require('react-native').View,
 }));
 
 jest.mock('expo-haptics', () => ({

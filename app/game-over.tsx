@@ -48,6 +48,12 @@ export default function GameOverScreen(): React.ReactElement {
   }, [completed, router, session]);
 
   // Ads are requested after the screen is up and are never awaited by the UI.
+  //
+  // The music bed needs no special handling here: a full-screen advert opens its
+  // own Android activity, which pauses this one and fires an AppState change,
+  // and the bootstrap in ProgressProvider already suspends the music on that.
+  // Doing it explicitly around the call instead would pause the music through
+  // every request that turns out not to fill, which is most of them.
   useEffect(() => {
     void maybeShowInterstitial({ puzzleActive: false });
   }, []);
