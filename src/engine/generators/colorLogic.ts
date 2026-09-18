@@ -1,4 +1,4 @@
-import { baseTimeLimit } from '../difficulty';
+import { baseTimeLimit, isHardOrAbove } from '../difficulty';
 import {
   AmbiguousPuzzleError,
   cell,
@@ -98,7 +98,8 @@ function bijectionPuzzle(rng: Rng, difficulty: Difficulty, shape: ShapeName): Pu
 function cyclePuzzle(rng: Rng, difficulty: Difficulty, shape: ShapeName): PuzzleDraft {
   const size = sizeFor(difficulty);
   const colors = rng.sample(COLORS, size);
-  const steps = difficulty === 'hard' ? rng.int(2, 3) : 2;
+  const steps =
+    difficulty === 'expert' ? rng.int(3, 4) : isHardOrAbove(difficulty) ? rng.int(2, 3) : 2;
 
   const startIndex = rng.int(0, size - 1);
   const answerIndexInCycle = (startIndex + steps) % size;

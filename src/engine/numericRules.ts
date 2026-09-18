@@ -105,12 +105,114 @@ const alternating: NumericFamily = {
   },
 };
 
+/**
+ * Multiply-then-add: each term is a*previous + b with a >= 2 and b != 0, e.g.
+ * 1, 3, 7, 15 (x2 + 1). a = 1 is arithmetic and b = 0 is geometric, so those
+ * are left to the families that own them.
+ */
+function affineCoefficients(terms: readonly number[]): { a: number; b: number } | null {
+  if (terms.length < 3) return null;
+  const [t0, t1, t2] = terms as [number, number, number];
+  if (t1 === t0) return null;
+  const a = (t2 - t1) / (t1 - t0);
+  if (!Number.isInteger(a) || a < 2) return null;
+  const b = t1 - a * t0;
+  if (b === 0) return null;
+  return { a, b };
+}
+
+const affine: NumericFamily = {
+  name: 'affine',
+  fits: (terms) => {
+    if (terms.length < 4) return false;
+    const coefficients = affineCoefficients(terms);
+    if (coefficients === null) return false;
+    for (let i = 1; i < terms.length; i += 1) {
+      const expected = coefficients.a * (terms[i - 1] as number) + coefficients.b;
+      if ((terms[i] as number) !== expected) return false;
+    }
+    return true;
+  },
+  next: (terms) => {
+    const { a, b } = affineCoefficients(terms) as { a: number; b: number };
+    return a * (terms[terms.length - 1] as number) + b;
+  },
+};
+
+const PRIME_LIMIT = 2000;
+let primeList: readonly number[] | null = null;
+
+/** Every prime up to a comfortable ceiling, computed once. */
+export function smallPrimes(): readonly number[] {
+  if (primeList !== null) return primeList;
+  const sieve = new Array<boolean>(PRIME_LIMIT + 1).fill(true);
+  sieve[0] = false;
+  sieve[1] = false;
+  for (let p = 2; p * p <= PRIME_LIMIT; p += 1) {
+    if (!sieve[p]) continue;
+    for (let multiple = p * p; multiple <= PRIME_LIMIT; multiple += p) sieve[multiple] = false;
+  }
+  const out: number[] = [];
+  sieve.forEach((isPrime, value) => {
+    if (isPrime) out.push(value);
+  });
+  primeList = out;
+  return out;
+}
+
+/** Consecutive primes: 5, 7, 11, 13 -> 17. */
+const consecutivePrimes: NumericFamily = {
+  name: 'primes',
+  fits: (terms) => {
+    if (terms.length < 3) return false;
+    const list = smallPrimes();
+    const start = list.indexOf(terms[0] as number);
+    if (start < 0 || start + terms.length >= list.length) return false;
+    return terms.every((term, index) => list[start + index] === term);
+  },
+  next: (terms) => {
+    const list = smallPrimes();
+    return list[list.indexOf(terms[0] as number) + terms.length] as number;
+  },
+};
+
+/**
+ * Two arithmetic runs taking turns: 2, 50, 4, 45, 6, 40 -> 8. Each lane needs
+ * three terms before it counts as a rule, hence the six-term minimum.
+ */
+function lanes(terms: readonly number[]): [number[], number[]] {
+  const even: number[] = [];
+  const odd: number[] = [];
+  terms.forEach((term, index) => (index % 2 === 0 ? even : odd).push(term));
+  return [even, odd];
+}
+
+const interleaved: NumericFamily = {
+  name: 'interleaved',
+  fits: (terms) => {
+    if (terms.length < 6) return false;
+    const [even, odd] = lanes(terms);
+    const evenDiffs = differences(even);
+    const oddDiffs = differences(odd);
+    if (!allEqual(evenDiffs) || !allEqual(oddDiffs)) return false;
+    return evenDiffs[0] !== 0 || oddDiffs[0] !== 0;
+  },
+  next: (terms) => {
+    const [even, odd] = lanes(terms);
+    const lane = terms.length % 2 === 0 ? even : odd;
+    return (lane[lane.length - 1] as number) + (differences(lane)[0] as number);
+  },
+};
+
 export const NUMERIC_FAMILIES: readonly NumericFamily[] = [
   arithmetic,
   geometric,
   quadratic,
   fibonacci,
   alternating,
+  affine,
+  consecutivePrimes,
+  interleaved,
 ];
 
 /** Every value the rule universe considers a legal continuation of `terms`. */

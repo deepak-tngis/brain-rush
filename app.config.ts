@@ -59,7 +59,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     package: 'com.vantyralabs.brainrush',
     // Play refuses a versionCode it has already seen, including one sitting in
     // an unreleased draft, so this rises with every uploaded bundle.
-    versionCode: 2,
+    // 2 is already in internal testing.
+    versionCode: 3,
     adaptiveIcon: {
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',

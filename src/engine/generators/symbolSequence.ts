@@ -1,4 +1,4 @@
-import { baseTimeLimit, optionCountFor } from '../difficulty';
+import { baseTimeLimit, isHardOrAbove, optionCountFor } from '../difficulty';
 import {
   AmbiguousPuzzleError,
   finalizePuzzle,
@@ -16,6 +16,9 @@ const SYMBOLS: readonly string[] = ['★', '●', '▲', '◆', '■', '♥', '�
 /** Visually close pairs, used to make the hard band deceptive rather than long. */
 const CONFUSABLE: readonly string[] = ['■', '◼', '◆', '♦', '▲', '▼'];
 
+/** Past this many copies a group stops being a puzzle and starts being an eye test. */
+const MAX_GROUP_SIZE = 9;
+
 interface CyclePlan {
   readonly visible: readonly string[];
   readonly answer: string;
@@ -24,8 +27,10 @@ interface CyclePlan {
 }
 
 function buildCycle(rng: Rng, difficulty: Difficulty): CyclePlan | null {
-  const period = difficulty === 'easy' ? rng.int(2, 3) : difficulty === 'medium' ? rng.int(3, 4) : rng.int(4, 5);
-  const alphabetPool = difficulty === 'hard' && rng.bool(0.5) ? CONFUSABLE : SYMBOLS;
+  const period =
+    difficulty === 'easy' ? rng.int(2, 3) : difficulty === 'medium' ? rng.int(3, 4) : rng.int(4, 5);
+  const confusableChance = difficulty === 'expert' ? 0.7 : difficulty === 'hard' ? 0.5 : 0;
+  const alphabetPool = rng.bool(confusableChance) ? CONFUSABLE : SYMBOLS;
   if (alphabetPool.length < period) return null;
 
   const alphabet = rng.sample(alphabetPool, period);
@@ -86,25 +91,44 @@ function cyclePuzzle(rng: Rng, difficulty: Difficulty): PuzzleDraft {
 }
 
 /**
- * Growth variant: the same symbol repeated a growing number of times. The rule
- * is arithmetic on the repeat count, so the answer is forced.
+ * Growth variant: the same symbol repeated a changing number of times. The rule
+ * is arithmetic on the repeat count, so the answer is forced. Harder bands can
+ * shrink as well as grow and step by two, so the answer is no longer "one more
+ * than the last one" every time.
  */
 function growthPuzzle(rng: Rng, difficulty: Difficulty): PuzzleDraft {
-  // Confusable glyphs rather than bigger groups carry the harder bands: a run of
-  // ten stars stops being a puzzle and starts being an eye test.
-  const symbol = rng.pick(difficulty === 'hard' ? CONFUSABLE : SYMBOLS);
-  const start = rng.int(1, 2);
-  const step = 1;
+  const hardish = isHardOrAbove(difficulty);
+  // Confusable glyphs rather than bigger groups carry the harder bands.
+  const symbol = rng.pick(hardish ? CONFUSABLE : SYMBOLS);
   const visibleCount = difficulty === 'easy' ? 3 : 4;
+  const shrinking = hardish && rng.bool(0.4);
+  const step = (difficulty === 'easy' ? 1 : rng.int(1, 2)) * (shrinking ? -1 : 1);
+  // Keep every group, including the answer, inside the legible range.
+  const span = step * visibleCount;
+  const start = shrinking
+    ? rng.int(1 - span, MAX_GROUP_SIZE)
+    : rng.int(1, Math.max(1, MAX_GROUP_SIZE - span));
 
   const counts: number[] = [];
   for (let i = 0; i < visibleCount + 1; i += 1) counts.push(start + i * step);
   const answerCount = counts[visibleCount] as number;
+  if (answerCount < 1 || answerCount > MAX_GROUP_SIZE) {
+    throw new AmbiguousPuzzleError('symbolSequence growth left the legible range');
+  }
   const answer = symbol.repeat(answerCount);
 
   const optionCount = optionCountFor(difficulty, 4, 4, 6);
   const seen = new Set<number>([answerCount]);
   const distractorCounts: number[] = [];
+  // The last visible group and the count one step beyond come first: they are
+  // what a player who misread the direction or the step size would tap.
+  const priority = [counts[visibleCount - 1] as number, answerCount + step, answerCount - step];
+  for (const value of priority) {
+    if (distractorCounts.length >= optionCount - 1) break;
+    if (value < 1 || value > MAX_GROUP_SIZE + 2 || seen.has(value)) continue;
+    seen.add(value);
+    distractorCounts.push(value);
+  }
   for (let delta = 1; distractorCounts.length < optionCount - 1 && delta < 12; delta += 1) {
     for (const sign of rng.shuffle([-1, 1])) {
       const value = answerCount + delta * sign;
@@ -123,6 +147,7 @@ function growthPuzzle(rng: Rng, difficulty: Difficulty): PuzzleDraft {
     hiddenCell(),
   ];
 
+  const magnitude = Math.abs(step);
   return finalizePuzzle(
     {
       kind: 'symbolSequence',
@@ -132,11 +157,11 @@ function growthPuzzle(rng: Rng, difficulty: Difficulty): PuzzleDraft {
       board: { kind: 'row', cells },
       contents: [
         textOption(answer),
-        ...distractorCounts.map((count) => textOption(symbol.repeat(count))),
+        ...rng.shuffle(distractorCounts).map((count) => textOption(symbol.repeat(count))),
       ],
       answerIndex: 0,
       timeLimitMs: baseTimeLimit(difficulty),
-      explanation: `Each step adds ${step} more ${symbol}. Next comes ${answerCount}.`,
+      explanation: `Each step ${step > 0 ? 'adds' : 'takes away'} ${magnitude} ${symbol}. Next comes ${answerCount}.`,
     },
     rng,
   );

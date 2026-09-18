@@ -32,7 +32,8 @@ interface Config {
 function configFor(difficulty: Difficulty): Config {
   if (difficulty === 'easy') return { itemCount: 3, studyMs: 2600 };
   if (difficulty === 'medium') return { itemCount: 4, studyMs: 2200 };
-  return { itemCount: 5, studyMs: 1800 };
+  if (difficulty === 'hard') return { itemCount: 5, studyMs: 1800 };
+  return { itemCount: 6, studyMs: 1600 };
 }
 
 /** Distinct in *both* shape and colour, so no two studied items look alike. */
@@ -141,7 +142,7 @@ function presencePuzzle(rng: Rng, difficulty: Difficulty, config: Config): Puzzl
 
 /** Hard variant: recall a short digit string. */
 function digitsPuzzle(rng: Rng, difficulty: Difficulty, config: Config): PuzzleDraft {
-  const length = difficulty === 'hard' ? 5 : 4;
+  const length = difficulty === 'expert' ? 6 : difficulty === 'hard' ? 5 : 4;
   const digits = Array.from({ length }, () => rng.int(0, 9)).join('');
 
   const seen = new Set<string>([digits]);

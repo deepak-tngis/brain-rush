@@ -23,6 +23,32 @@ describe('numeric rule universe', () => {
     expect(predictNext([5, 12, 10, 17, 15])).toEqual([22]);
   });
 
+  it('continues a multiply-then-add run', () => {
+    expect(predictNext([1, 3, 7, 15])).toEqual([31]);
+    expect(matchingFamilyNames([1, 3, 7, 15])).toEqual(['affine']);
+    expect(predictNext([2, 5, 14, 41])).toEqual([122]);
+  });
+
+  it('continues the primes', () => {
+    expect(predictNext([2, 3, 5, 7, 11])).toEqual([13]);
+    expect(matchingFamilyNames([2, 3, 5, 7, 11])).toEqual(['primes']);
+  });
+
+  it('refuses a prime run that another rule would continue differently', () => {
+    // 13, 17, 19, 23 also reads as +4, +2, +4, +2 … which says 25.
+    expect(hasUniqueContinuation([13, 17, 19, 23])).toBe(false);
+  });
+
+  it('continues two interleaved runs along the right lane', () => {
+    expect(predictNext([2, 50, 4, 45, 6, 40])).toEqual([8]);
+    expect(predictNext([2, 50, 4, 45, 6, 40, 8])).toEqual([35]);
+    expect(matchingFamilyNames([2, 50, 4, 45, 6, 40])).toEqual(['interleaved']);
+  });
+
+  it('needs three terms per lane before it will call a run interleaved', () => {
+    expect(matchingFamilyNames([2, 50, 4, 45, 6])).not.toContain('interleaved');
+  });
+
   it('refuses to continue a run no rule explains', () => {
     expect(predictNext([4, 9, 1, 25])).toEqual([]);
     expect(fitsAnyFamily([4, 9, 1, 25])).toBe(false);

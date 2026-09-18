@@ -1,4 +1,4 @@
-import { baseTimeLimit, optionCountFor } from '../difficulty';
+import { baseTimeLimit, isHardOrAbove, optionCountFor } from '../difficulty';
 import {
   cell,
   finalizePuzzle,
@@ -11,7 +11,7 @@ import type { Cell, Difficulty, GlyphColor, PuzzleDraft, ShapeName } from '../ty
 
 const SHAPES: readonly ShapeName[] = ['circle', 'square', 'triangle', 'diamond', 'star', 'heart', 'hexagon'];
 const DISTINCT_COLORS: readonly GlyphColor[] = ['blue', 'orange', 'pink', 'green'];
-const CLOSE_COLORS: readonly GlyphColor[] = ['blue', 'teal', 'purple', 'pink'];
+const CLOSE_COLORS: readonly GlyphColor[] = ['blue', 'teal', 'purple', 'pink', 'red'];
 
 const SHAPE_PLURALS: Record<string, string> = {
   circle: 'circles',
@@ -33,7 +33,8 @@ interface Config {
 function configFor(rng: Rng, difficulty: Difficulty): Config {
   if (difficulty === 'easy') return { total: rng.int(6, 9), typeCount: 2, columns: 4, rows: 3 };
   if (difficulty === 'medium') return { total: rng.int(11, 15), typeCount: 3, columns: 5, rows: 4 };
-  return { total: rng.int(16, 20), typeCount: 4, columns: 6, rows: 4 };
+  if (difficulty === 'hard') return { total: rng.int(16, 20), typeCount: 4, columns: 6, rows: 4 };
+  return { total: rng.int(20, 24), typeCount: 5, columns: 6, rows: 4 };
 }
 
 export function generateCountObjects(rng: Rng, difficulty: Difficulty): PuzzleDraft {
@@ -43,7 +44,7 @@ export function generateCountObjects(rng: Rng, difficulty: Difficulty): PuzzleDr
   const countBy: 'shape' | 'color' = difficulty === 'easy' ? 'shape' : rng.pick(['shape', 'color'] as const);
 
   const shapes = rng.sample(SHAPES, config.typeCount);
-  const palette = difficulty === 'hard' ? CLOSE_COLORS : DISTINCT_COLORS;
+  const palette = isHardOrAbove(difficulty) ? CLOSE_COLORS : DISTINCT_COLORS;
   const colors = rng.sample(palette, Math.min(config.typeCount, palette.length));
 
   // Split the total across the types, guaranteeing every type is present at

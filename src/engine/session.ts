@@ -1,4 +1,4 @@
-import { createPuzzle } from './puzzleFactory';
+import { createPuzzle, RECENT_KIND_WINDOW } from './puzzleFactory';
 import {
   COINS_PER_CORRECT,
   MAX_LIVES,
@@ -53,25 +53,28 @@ export interface SessionState {
 const ENDLESS_LOOKAHEAD = 6;
 export const DAILY_QUESTION_COUNT = 10;
 
-function generateUpTo(seed: number, existing: readonly Puzzle[], target: number): Puzzle[] {
+function generateUpTo(
+  seed: number,
+  existing: readonly Puzzle[],
+  target: number,
+  total?: number,
+): Puzzle[] {
   const puzzles = existing.slice();
   while (puzzles.length < target) {
-    const avoid: PuzzleKind[] = puzzles.slice(-2).map((puzzle) => puzzle.kind);
-    puzzles.push(createPuzzle({ seed, index: puzzles.length, avoid }));
+    const avoid: PuzzleKind[] = puzzles.slice(-RECENT_KIND_WINDOW).map((puzzle) => puzzle.kind);
+    puzzles.push(createPuzzle({ seed, index: puzzles.length, total, avoid }));
   }
   return puzzles;
 }
 
 export function createSession(config: SessionConfig): SessionState {
-  const target =
-    config.mode === 'daily'
-      ? (config.questionCount ?? DAILY_QUESTION_COUNT)
-      : ENDLESS_LOOKAHEAD;
+  const total = config.mode === 'daily' ? (config.questionCount ?? DAILY_QUESTION_COUNT) : undefined;
+  const target = total ?? ENDLESS_LOOKAHEAD;
 
   return {
     config,
     status: 'playing',
-    puzzles: generateUpTo(config.seed, [], target),
+    puzzles: generateUpTo(config.seed, [], target, total),
     index: 0,
     score: 0,
     coinsEarned: 0,

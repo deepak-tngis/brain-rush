@@ -1,4 +1,5 @@
 import { GENERATORS } from '../generators';
+import { CATEGORIES } from '../generators/oddOneOut';
 import { cellSignature } from '../puzzleKit';
 import { createRng, hashSeed } from '../rng';
 import { predictNext } from '../numericRules';
@@ -170,27 +171,71 @@ describe('Count Objects', () => {
   });
 });
 
+/** Shortest period that the whole run repeats with, or its length if none. */
+function shortestPeriod(stream: readonly string[]): number {
+  for (let candidate = 1; candidate * 2 <= stream.length; candidate += 1) {
+    const periodic = stream.every(
+      (item, index) => index < candidate || item === stream[index - candidate],
+    );
+    if (periodic) return candidate;
+  }
+  return stream.length;
+}
+
 describe('Shape Pattern', () => {
   it('offers the shape that continues the visible cycle', () => {
+    let checked = 0;
     forEachSeed('shapePattern', (puzzle) => {
       if (puzzle.board.kind !== 'row') throw new Error('expected a row board');
+      if (!puzzle.instruction.startsWith('Which shape continues')) return;
+      checked += 1;
       const visible = puzzle.board.cells.filter((item) => item.hidden !== true);
-      // Re-derive the period from the board and read off the next entry.
-      let period = visible.length;
-      for (let candidate = 1; candidate * 2 <= visible.length; candidate += 1) {
-        const periodic = visible.every(
-          (item, index) =>
-            index < candidate ||
-            cellSignature(item) === cellSignature(visible[index - candidate] as Cell),
-        );
-        if (periodic) {
-          period = candidate;
-          break;
-        }
-      }
+      const period = shortestPeriod(visible.map(cellSignature));
       const expected = visible[visible.length - period] as Cell;
       expect(cellSignature(answerCell(puzzle))).toBe(cellSignature(expected));
     });
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it('reads each attribute on its own rhythm when two patterns run together', () => {
+    let checked = 0;
+    forEachSeed('shapePattern', (puzzle) => {
+      if (puzzle.board.kind !== 'row') throw new Error('expected a row board');
+      if (!puzzle.instruction.includes('each follow their own pattern')) return;
+      checked += 1;
+      const visible = puzzle.board.cells.filter((item) => item.hidden !== true);
+      const continuation = <T extends string>(stream: readonly T[]): T =>
+        stream[stream.length - shortestPeriod(stream)] as T;
+      const answer = answerCell(puzzle);
+      expect(answer.shape).toBe(continuation(visible.map((item) => item.shape)));
+      expect(answer.color).toBe(continuation(visible.map((item) => item.color)));
+      expect(answer.filled ? 'f' : 'o').toBe(
+        continuation(visible.map((item) => (item.filled ? 'f' : 'o'))),
+      );
+    });
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  it('offers the next orientation when the glyph keeps turning', () => {
+    let checked = 0;
+    forEachSeed('shapePattern', (puzzle) => {
+      if (puzzle.board.kind !== 'row') throw new Error('expected a row board');
+      if (!puzzle.instruction.startsWith('The shape keeps turning')) return;
+      checked += 1;
+      const visible = puzzle.board.cells.filter((item) => item.hidden !== true);
+      const last = visible[visible.length - 1] as Cell;
+      const previous = visible[visible.length - 2] as Cell;
+      const step = (((last.rotation - previous.rotation) % 360) + 360) % 360;
+      // Every visible step must be the same turn, or the rule is not a rule.
+      for (let i = 1; i < visible.length; i += 1) {
+        const turn =
+          ((((visible[i] as Cell).rotation - (visible[i - 1] as Cell).rotation) % 360) + 360) % 360;
+        expect(turn).toBe(step);
+      }
+      expect(answerCell(puzzle).rotation).toBe((last.rotation + step) % 360);
+      expect(answerCell(puzzle).shape).toBe(last.shape);
+    });
+    expect(checked).toBeGreaterThan(0);
   });
 });
 
@@ -301,6 +346,34 @@ describe('Matching', () => {
       );
       expect(identical).toHaveLength(1);
       expect((identical[0] as (typeof identical)[number]).id).toBe(puzzle.answerId);
+    });
+  });
+});
+
+describe('Odd One Out', () => {
+  it('keeps every word in exactly one category', () => {
+    const owners = new Map<string, string>();
+    for (const category of CATEGORIES) {
+      for (const word of category.words) {
+        const key = word.toLowerCase();
+        expect(owners.get(key)).toBeUndefined();
+        owners.set(key, category.name);
+      }
+    }
+  });
+
+  it('names the odd word in its explanation and never a group word', () => {
+    forEachSeed('oddOneOut', (puzzle) => {
+      if (puzzle.options[0]?.content.kind !== 'text') return;
+      const answer = answerText(puzzle);
+      expect(puzzle.explanation).toContain(`"${answer}"`);
+      const groupWords = puzzle.options
+        .filter((option) => option.id !== puzzle.answerId)
+        .map((option) => (option.content.kind === 'text' ? option.content.text : ''));
+      const groupCategory = CATEGORIES.find((category) => category.words.includes(groupWords[0] as string));
+      expect(groupCategory).toBeDefined();
+      for (const word of groupWords) expect(groupCategory?.words).toContain(word);
+      expect(groupCategory?.words).not.toContain(answer);
     });
   });
 });

@@ -10,10 +10,40 @@ export interface PuzzleRequest {
   readonly seed: number;
   /** Zero-based question number — drives both difficulty and the sub-seed. */
   readonly index: number;
+  /**
+   * Length of a fixed-length run. Sets the difficulty curve so a short run still
+   * reaches the hard band; omitted for open-ended runs.
+   */
+  readonly total?: number;
   /** Kinds to avoid so the same puzzle type never appears twice in a row. */
   readonly avoid?: readonly PuzzleKind[];
   /** Pin the kind (used by tests and by themed challenges). */
   readonly kind?: PuzzleKind;
+}
+
+/** How many preceding puzzles a new one must differ from. */
+export const RECENT_KIND_WINDOW = 3;
+
+/**
+ * Kinds that read as the same puzzle even though they are generated
+ * separately. Avoiding one avoids its twins too, so "A B C A B C ?" in shapes
+ * is never followed by "A B C A B C ?" in symbols.
+ */
+const RELATED_KINDS: Readonly<Partial<Record<PuzzleKind, readonly PuzzleKind[]>>> = {
+  shapePattern: ['symbolSequence'],
+  symbolSequence: ['shapePattern'],
+  numberSequence: ['missingNumber'],
+  missingNumber: ['numberSequence'],
+  matching: ['whichIsDifferent'],
+  whichIsDifferent: ['matching'],
+};
+
+function expandAvoid(avoid: readonly PuzzleKind[]): PuzzleKind[] {
+  const out = new Set<PuzzleKind>(avoid);
+  for (const kind of avoid) {
+    for (const related of RELATED_KINDS[kind] ?? []) out.add(related);
+  }
+  return [...out];
 }
 
 function weightedKind(rng: Rng, avoid: readonly PuzzleKind[]): PuzzleKind {
@@ -42,30 +72,33 @@ function tryGenerate(kind: PuzzleKind, rng: Rng, difficulty: Difficulty): Puzzle
 }
 
 /**
- * Builds one puzzle. Deterministic in `(seed, index)`, and total: if a kind
- * cannot produce a clean puzzle for this seed the factory moves on to another
- * kind rather than failing.
+ * Builds one puzzle. Deterministic in `(seed, index, total)`, and total: if a
+ * kind cannot produce a clean puzzle for this seed the factory moves on to
+ * another kind rather than failing.
  */
 export function createPuzzle(request: PuzzleRequest): Puzzle {
-  const { seed, index, avoid = [], kind: pinnedKind } = request;
-  const difficulty = difficultyForIndex(index);
+  const { seed, index, total, avoid = [], kind: pinnedKind } = request;
+  const difficulty = difficultyForIndex(index, total);
+  const avoidAll = expandAvoid(avoid);
 
   for (let attempt = 0; attempt < 24; attempt += 1) {
     // Each attempt gets its own sub-stream, so a retry genuinely resamples
     // while the whole run stays reproducible from the run seed alone.
     const rng = createRng(hashSeed(seed, index, attempt));
-    const kind = pinnedKind ?? weightedKind(rng, attempt < 8 ? avoid : []);
+    // The exact kinds just seen stay off the table for longer than their twins.
+    const blocked = attempt < 8 ? avoidAll : attempt < 16 ? avoid : [];
+    const kind = pinnedKind ?? weightedKind(rng, blocked);
     const draft = tryGenerate(kind, rng, difficulty);
     if (draft === null) continue;
 
-    return { ...draft, id: `p-${seed}-${index}`, timeLimitMs: pacedTimeLimit(draft, index) };
+    return { ...draft, id: `p-${seed}-${index}`, timeLimitMs: pacedTimeLimit(draft, index, total) };
   }
 
   // Quick Math is the most constrained generator in the set and has no rejection
   // path, so it is the guaranteed backstop.
   const rng = createRng(hashSeed(seed, index, 'fallback'));
   const draft = GENERATORS.quickMath(rng, difficulty);
-  return { ...draft, id: `p-${seed}-${index}`, timeLimitMs: pacedTimeLimit(draft, index) };
+  return { ...draft, id: `p-${seed}-${index}`, timeLimitMs: pacedTimeLimit(draft, index, total) };
 }
 
 /**
@@ -74,16 +107,16 @@ export function createPuzzle(request: PuzzleRequest): Puzzle {
  * twenty objects needs longer than reading "7 x 8"). The generator's multiplier
  * is recovered from its draft and re-applied to the band's current window.
  */
-function pacedTimeLimit(draft: PuzzleDraft, index: number): number {
+function pacedTimeLimit(draft: PuzzleDraft, index: number, total?: number): number {
   const generatorScale = draft.timeLimitMs / baseTimeLimit(draft.difficulty);
-  return Math.round(timeLimitForIndex(index) * generatorScale);
+  return Math.round(timeLimitForIndex(index, 1, total) * generatorScale);
 }
 
-export function createPuzzleSequence(seed: number, count: number): Puzzle[] {
+export function createPuzzleSequence(seed: number, count: number, total?: number): Puzzle[] {
   const puzzles: Puzzle[] = [];
   for (let index = 0; index < count; index += 1) {
-    const previous = puzzles.slice(-2).map((puzzle) => puzzle.kind);
-    puzzles.push(createPuzzle({ seed, index, avoid: previous }));
+    const avoid = puzzles.slice(-RECENT_KIND_WINDOW).map((puzzle) => puzzle.kind);
+    puzzles.push(createPuzzle({ seed, index, total, avoid }));
   }
   return puzzles;
 }

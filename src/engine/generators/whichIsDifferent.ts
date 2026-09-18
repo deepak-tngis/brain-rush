@@ -1,4 +1,4 @@
-import { baseTimeLimit, optionCountFor } from '../difficulty';
+import { baseTimeLimit, isHardOrAbove, optionCountFor } from '../difficulty';
 import { cell, cellSignature, finalizePuzzle, gridOption } from '../puzzleKit';
 import type { Rng } from '../rng';
 import type { Cell, Difficulty, GlyphColor, PuzzleDraft, ShapeName } from '../types';
@@ -62,7 +62,7 @@ const TWEAK_LABEL: Record<Tweak, string> = {
  */
 export function generateWhichIsDifferent(rng: Rng, difficulty: Difficulty): PuzzleDraft {
   const cols = difficulty === 'easy' ? 2 : difficulty === 'medium' ? 2 : 3;
-  const rows = difficulty === 'hard' ? 3 : 2;
+  const rows = isHardOrAbove(difficulty) ? 3 : 2;
   const size = cols * rows;
   const optionCount = optionCountFor(difficulty, 4, 6, 6);
   const tweak = tweakFor(rng, difficulty);

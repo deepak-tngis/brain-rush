@@ -2,9 +2,10 @@ import { difficultyForIndex } from '../difficulty';
 import { GENERATORS } from '../generators';
 import { optionSignature } from '../puzzleKit';
 import { createRng, hashSeed } from '../rng';
+import { DAILY_QUESTION_COUNT } from '../session';
 import { DIFFICULTIES, PUZZLE_KINDS } from '../types';
 import type { Difficulty, Puzzle, PuzzleDraft, PuzzleKind } from '../types';
-import { createPuzzle, createPuzzleSequence } from '../puzzleFactory';
+import { createPuzzle, createPuzzleSequence, RECENT_KIND_WINDOW } from '../puzzleFactory';
 
 /** How many seeds each generator is hammered with. Cheap, and catches a lot. */
 const SEEDS_PER_CASE = 150;
@@ -161,13 +162,48 @@ describe('the puzzle factory', () => {
     }
   });
 
-  it('avoids repeating a puzzle type back to back', () => {
-    const sequence: Puzzle[] = createPuzzleSequence(31337, 40);
-    let repeats = 0;
-    for (let i = 1; i < sequence.length; i += 1) {
-      if ((sequence[i] as Puzzle).kind === (sequence[i - 1] as Puzzle).kind) repeats += 1;
+  it('avoids repeating a puzzle type within the recent window', () => {
+    for (let seed = 0; seed < 30; seed += 1) {
+      const sequence: Puzzle[] = createPuzzleSequence(31337 + seed, 40);
+      for (let i = 1; i < sequence.length; i += 1) {
+        const recent = sequence.slice(Math.max(0, i - RECENT_KIND_WINDOW), i).map((p) => p.kind);
+        expect(recent).not.toContain((sequence[i] as Puzzle).kind);
+      }
     }
-    expect(repeats).toBe(0);
+  });
+
+  it('never follows a pattern puzzle with its look-alike twin', () => {
+    const twins: ReadonlyArray<readonly [PuzzleKind, PuzzleKind]> = [
+      ['shapePattern', 'symbolSequence'],
+      ['numberSequence', 'missingNumber'],
+    ];
+    for (let seed = 0; seed < 30; seed += 1) {
+      const sequence: Puzzle[] = createPuzzleSequence(777 + seed, 40);
+      for (let i = 1; i < sequence.length; i += 1) {
+        const previous = (sequence[i - 1] as Puzzle).kind;
+        const current = (sequence[i] as Puzzle).kind;
+        for (const [a, b] of twins) {
+          const adjacentTwins = (previous === a && current === b) || (previous === b && current === a);
+          expect(adjacentTwins).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('climbs into the expert band on a long endless run', () => {
+    const sequence = createPuzzleSequence(4, 30);
+    const bands = new Set(sequence.map((puzzle) => puzzle.difficulty));
+    expect(bands).toEqual(new Set(['easy', 'medium', 'hard', 'expert']));
+    expect((sequence[sequence.length - 1] as Puzzle).difficulty).toBe('expert');
+  });
+
+  it('spends part of a fixed-length run in the hard band', () => {
+    const daily = createPuzzleSequence(4, DAILY_QUESTION_COUNT, DAILY_QUESTION_COUNT);
+    const bands = daily.map((puzzle) => puzzle.difficulty);
+    expect(bands.slice(0, 3)).toEqual(['easy', 'easy', 'easy']);
+    expect(bands.slice(3, 7)).toEqual(['medium', 'medium', 'medium', 'medium']);
+    expect(bands.slice(7)).toEqual(['hard', 'hard', 'hard']);
+    expect(difficultyForIndex(5, 10)).toBe('medium');
   });
 
   it('reaches every puzzle type over a long run', () => {

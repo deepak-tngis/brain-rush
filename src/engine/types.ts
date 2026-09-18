@@ -23,7 +23,7 @@ export const PUZZLE_KINDS = [
 
 export type PuzzleKind = (typeof PUZZLE_KINDS)[number];
 
-export const DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+export const DIFFICULTIES = ['easy', 'medium', 'hard', 'expert'] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
 
 /** Shapes the renderer knows how to draw. */

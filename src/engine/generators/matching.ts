@@ -36,8 +36,10 @@ function mutate(rng: Rng, tile: readonly Cell[]): Cell[] {
  * explicit count proves that exactly one option matches the target.
  */
 export function generateMatching(rng: Rng, difficulty: Difficulty): PuzzleDraft {
-  const tileSize = difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : 3;
-  const cols = tileSize;
+  const tileSize =
+    difficulty === 'easy' ? 1 : difficulty === 'medium' ? 2 : difficulty === 'hard' ? 3 : 4;
+  // A four-cell tile is a 2x2 block rather than a strip.
+  const cols = tileSize === 4 ? 2 : tileSize;
   const optionCount = optionCountFor(difficulty, 4, 4, 6);
 
   const target: Cell[] = Array.from({ length: tileSize }, () => randomCell(rng));

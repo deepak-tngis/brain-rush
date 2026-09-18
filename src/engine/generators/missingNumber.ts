@@ -1,4 +1,4 @@
-import { baseTimeLimit, optionCountFor } from '../difficulty';
+import { baseTimeLimit, isHardOrAbove, optionCountFor } from '../difficulty';
 import { fitsAnyFamily, hasUniqueContinuation } from '../numericRules';
 import {
   AmbiguousPuzzleError,
@@ -29,44 +29,67 @@ interface GridCandidate {
   readonly operator: '+' | '-' | 'x';
 }
 
+type SeriesShape = 'add' | 'double' | 'grow' | 'affine';
+
+const SERIES_SHAPES: Readonly<Record<Difficulty, readonly SeriesShape[]>> = {
+  easy: ['add', 'double'],
+  medium: ['add', 'double', 'grow'],
+  hard: ['add', 'double', 'grow', 'affine'],
+  expert: ['add', 'grow', 'affine', 'double'],
+};
+
 /**
  * A gap in the middle of a run is pinned down from both sides, which makes it
  * the strictest of the numeric puzzles: the candidate has to reproduce the rule
  * looking forwards *and* backwards.
  */
 function buildSeries(rng: Rng, difficulty: Difficulty): SeriesCandidate | null {
+  const hardish = isHardOrAbove(difficulty);
+  const expert = difficulty === 'expert';
   const length = difficulty === 'easy' ? 5 : 6;
-  const shape = difficulty === 'easy' ? rng.pick(['add', 'double'] as const) : rng.pick(['add', 'double', 'grow'] as const);
+  const shape = rng.pick(SERIES_SHAPES[difficulty]);
 
   const terms: number[] = [];
   let explanation = '';
 
   if (shape === 'add') {
-    const step = rng.int(2, difficulty === 'hard' ? 15 : 9) * (rng.bool(0.25) ? -1 : 1);
-    let value = rng.int(step < 0 ? 70 : 1, step < 0 ? 120 : 20);
+    const negative = rng.bool(expert ? 0.4 : 0.25);
+    const step = rng.int(expert ? 6 : 2, expert ? 25 : hardish ? 15 : 9) * (negative ? -1 : 1);
+    let value = negative
+      ? rng.int(expert ? 150 : 70, expert ? 220 : 120)
+      : rng.int(1, hardish ? 40 : 20);
     for (let i = 0; i < length; i += 1) {
       terms.push(value);
       value += step;
     }
     explanation = `Each step ${step > 0 ? 'adds' : 'subtracts'} ${Math.abs(step)}.`;
   } else if (shape === 'double') {
-    const ratio = difficulty === 'hard' ? rng.pick([2, 3]) : 2;
+    const ratio = hardish ? rng.pick([2, 3]) : 2;
     let value = rng.int(1, ratio === 2 ? 5 : 3);
     for (let i = 0; i < length; i += 1) {
       terms.push(value);
       value *= ratio;
     }
     explanation = `Each step multiplies by ${ratio}.`;
-  } else {
-    const growth = rng.int(1, 4);
+  } else if (shape === 'grow') {
+    const growth = rng.int(expert ? 2 : 1, expert ? 7 : 4);
     let step = rng.int(1, 5);
-    let value = rng.int(1, 9);
+    let value = rng.int(1, expert ? 15 : 9);
     for (let i = 0; i < length; i += 1) {
       terms.push(value);
       value += step;
       step += growth;
     }
     explanation = `The gap grows by ${growth} each step.`;
+  } else {
+    const a = expert ? rng.pick([2, 3]) : 2;
+    const b = rng.int(1, expert ? 6 : 4);
+    let value = rng.int(1, a === 3 ? 3 : 4);
+    for (let i = 0; i < length; i += 1) {
+      terms.push(value);
+      value = a * value + b;
+    }
+    explanation = `Each step multiplies by ${a} and adds ${b}.`;
   }
 
   if (terms.some((value) => value < 0 || value > 9999)) return null;
@@ -151,13 +174,24 @@ function solveRow(
 }
 
 function buildGrid(rng: Rng, difficulty: Difficulty): GridCandidate | null {
-  const operator = difficulty === 'hard' ? rng.pick(['+', '-', 'x'] as const) : rng.pick(['+', '-'] as const);
-  const max = difficulty === 'easy' ? 9 : difficulty === 'medium' ? 15 : 12;
+  const hardish = isHardOrAbove(difficulty);
+  const operator = hardish ? rng.pick(['+', '-', 'x'] as const) : rng.pick(['+', '-'] as const);
+  const max =
+    difficulty === 'easy'
+      ? 9
+      : difficulty === 'medium'
+        ? 15
+        : operator === 'x'
+          ? 12
+          : difficulty === 'expert'
+            ? 25
+            : 15;
+  const min = difficulty === 'expert' && operator !== 'x' ? 6 : 2;
 
   const rows: Array<readonly [number, number, number]> = [];
   for (let i = 0; i < 3; i += 1) {
-    const a = rng.int(2, max);
-    const b = operator === '-' ? rng.int(1, a - 1) : rng.int(2, max);
+    const a = rng.int(min, max);
+    const b = operator === '-' ? rng.int(1, a - 1) : rng.int(min, max);
     const c = applyOperator(operator, a, b);
     if (c === null || c > 999) return null;
     rows.push([a, b, c] as const);
@@ -166,7 +200,9 @@ function buildGrid(rng: Rng, difficulty: Difficulty): GridCandidate | null {
   const fingerprints = new Set(rows.map((row) => row.join(',')));
   if (fingerprints.size !== rows.length) return null;
 
-  const holeRow = 2;
+  // Easier bands keep the gap in the last row, under two worked examples;
+  // harder bands can hide it anywhere.
+  const holeRow = hardish ? rng.int(0, 2) : 2;
   const holeCol = rng.int(0, 2);
   const answer = (rows[holeRow] as readonly [number, number, number])[holeCol];
 
@@ -175,9 +211,9 @@ function buildGrid(rng: Rng, difficulty: Difficulty): GridCandidate | null {
   // gap, the grid has two defensible answers and is thrown away.
   const explanations = new Set<number>();
   for (const op of ROW_OPERATORS) {
-    const fitsVisibleRows = rows
-      .slice(0, holeRow)
-      .every((row) => rowFits(op, row as readonly [number, number, number]));
+    const fitsVisibleRows = rows.every(
+      (row, index) => index === holeRow || rowFits(op, row as readonly [number, number, number]),
+    );
     if (!fitsVisibleRows) continue;
     const solved = solveRow(op, rows[holeRow] as readonly [number, number, number], holeCol);
     if (solved !== null) explanations.add(solved);
