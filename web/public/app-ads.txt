@@ -1,0 +1,3 @@
+# ads.txt / app-ads.txt format: https://iabtechlab.com/ads-txt/
+# Authorized seller for Brain Rush (com.vantyralabs.brainrush)
+google.com, pub-8569797046557007, DIRECT, f08c47fec0942fa0

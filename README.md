@@ -7,6 +7,8 @@ mode.
 - **Package** `com.vantyralabs.brainrush`
 - **Version** 1.0.0 (versionCode 1)
 - **Stack** React Native 0.87 / Expo SDK 57 / TypeScript (strict) / expo-router
+- **Website** https://brain-rush-f633f.web.app — hosts the privacy policy and
+  `app-ads.txt` that Play Console and AdMob verify against (source in `web/`)
 
 ---
 
